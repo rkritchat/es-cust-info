@@ -21,10 +21,10 @@ func main() {
 
 	//init service
 	userCredentialService := custinfo.NewService(userCredentialRepo)
-	loginService := login.NewService(userCredentialRepo, userRoleRepo, cfg.JwtAuth)
+	loginService := login.NewService(userCredentialRepo, userRoleRepo, cfg.JwtAuth, cfg.Env)
 
 	//init router
-	r := router.InitRouter(userCredentialService, loginService)
+	r := router.InitRouter(userCredentialService, loginService, cfg.JwtAuth)
 
 	fmt.Printf("start on port %v", cfg.Env.Port)
 	err := http.ListenAndServe(cfg.Env.Port, r)

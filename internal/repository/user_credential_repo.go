@@ -19,6 +19,7 @@ type UserCredentialRepo interface {
 	Create(entity UserCredentialEntity) error
 	FindByUsernameOrEmail(username, email string) (r UserCredentialEntity, err error)
 	FindByUsername(username string) (e UserCredentialEntity, err error)
+	FindAllUsername() (r []string, err error)
 }
 
 type userCredentialRepo struct {
@@ -96,5 +97,31 @@ func (repo userCredentialRepo) FindByUsername(username string) (r UserCredential
 		return
 	}
 
+	return
+}
+
+func (repo userCredentialRepo) FindAllUsername() (r []string, err error) {
+	query := fmt.Sprintf("SELECT username FROM user_credential")
+	var stmt *sql.Stmt
+	var rows *sql.Rows
+	stmt, err = repo.db.Prepare(query)
+	if err != nil {
+		return
+	}
+	defer stmt.Close()
+	rows, err = stmt.Query()
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tmp string
+		err = rows.Scan(&tmp)
+		if err != nil {
+			return
+		}
+		r = append(r, tmp)
+	}
 	return
 }

@@ -5,11 +5,13 @@ import (
 	"es-cust-info/internal/login"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/jwtauth/v5"
 	"net/http"
 )
 
-func InitRouter(userCredentialService custinfo.Service, loginService login.Service) *chi.Mux {
+func InitRouter(userCredentialService custinfo.Service, loginService login.Service, auth *jwtauth.JWTAuth) *chi.Mux {
 	r := chi.NewRouter()
+
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc:  AllowOriginFunc,
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
@@ -18,6 +20,13 @@ func InitRouter(userCredentialService custinfo.Service, loginService login.Servi
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+
+	//need valid token
+	r.Group(func(router chi.Router) {
+		router.Use(jwtauth.Verifier(auth))
+		router.Use(jwtauth.Authenticator)
+		router.Get("/users", userCredentialService.GetAllUsername)
+	})
 
 	r.Post("/user/signup", userCredentialService.Signup)
 	r.Post("/user/login", loginService.Login)

@@ -6,6 +6,7 @@ import (
 	"es-cust-info/internal/common"
 	"es-cust-info/internal/repository"
 	"es-cust-info/internal/utils"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -17,7 +18,7 @@ const (
 
 type Service interface {
 	Signup(w http.ResponseWriter, r *http.Request)
-	Login(w http.ResponseWriter, r *http.Request)
+	GetAllUsername(w http.ResponseWriter, r *http.Request)
 }
 
 type service struct {
@@ -102,8 +103,26 @@ FAILED:
 	})
 }
 
-func (s service) Login(w http.ResponseWriter, r *http.Request) {
+type GetAllUsernameResp struct {
+	common.Resp
+	Usernames []string `json:"usernames"`
+}
 
+func (s service) GetAllUsername(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("content-type", "application/json")
+	users, err := s.userCredentialRepo.FindAllUsername()
+	if err != nil {
+		_ = json.NewEncoder(w).Encode(&GetAllUsernameResp{
+			Resp: common.Resp{Message: "failed", Error: "internal server error"},
+		})
+		return
+	}
+
+	fmt.Println(users)
+	_ = json.NewEncoder(w).Encode(&GetAllUsernameResp{
+		Resp:      common.Resp{Message: "success"},
+		Usernames: users,
+	})
 }
 
 func (s service) validateDuplicate(username, email string) error {

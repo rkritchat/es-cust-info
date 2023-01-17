@@ -30,11 +30,12 @@ type service struct {
 	env                config.Env
 }
 
-func NewService(userCredentialRepo repository.UserCredentialRepo, userRoleRepo repository.UserRoleRepo, jwtAuth *jwtauth.JWTAuth) Service {
+func NewService(userCredentialRepo repository.UserCredentialRepo, userRoleRepo repository.UserRoleRepo, jwtAuth *jwtauth.JWTAuth, env config.Env) Service {
 	return &service{
 		userCredentialRepo: userCredentialRepo,
 		userRoleRepo:       userRoleRepo,
 		jwtAuth:            jwtAuth,
+		env:                env,
 	}
 }
 

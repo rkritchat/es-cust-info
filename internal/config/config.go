@@ -23,7 +23,7 @@ type Env struct {
 	MySQLHost         string `env:"MYSQL_HOST"`
 	MySQLDBName       string `env:"MYSQL_DB_NAME"`
 	JwtTokenSecret    string `env:"JWT_TOKEN_SECRET"`
-	JwtExpiredInHours int    `json:"JWT_EXPIRED_IN_HOURS"`
+	JwtExpiredInHours int    `env:"JWT_EXPIRED_IN_HOURS"`
 }
 
 func InitConfig() *Cfg {
