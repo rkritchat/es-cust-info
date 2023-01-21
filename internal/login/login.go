@@ -3,6 +3,7 @@ package login
 import (
 	"encoding/json"
 	"errors"
+	"es-cust-info/internal/cache"
 	"es-cust-info/internal/common"
 	"es-cust-info/internal/config"
 	"es-cust-info/internal/repository"
@@ -10,7 +11,6 @@ import (
 	"fmt"
 	"github.com/go-chi/jwtauth/v5"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -27,14 +27,16 @@ type service struct {
 	userCredentialRepo repository.UserCredentialRepo
 	userRoleRepo       repository.UserRoleRepo
 	jwtAuth            *jwtauth.JWTAuth
+	cache              cache.Cache
 	env                config.Env
 }
 
-func NewService(userCredentialRepo repository.UserCredentialRepo, userRoleRepo repository.UserRoleRepo, jwtAuth *jwtauth.JWTAuth, env config.Env) Service {
+func NewService(userCredentialRepo repository.UserCredentialRepo, userRoleRepo repository.UserRoleRepo, jwtAuth *jwtauth.JWTAuth, cache cache.Cache, env config.Env) Service {
 	return &service{
 		userCredentialRepo: userCredentialRepo,
 		userRoleRepo:       userRoleRepo,
 		jwtAuth:            jwtAuth,
+		cache:              cache,
 		env:                env,
 	}
 }
@@ -58,6 +60,7 @@ func (s service) Login(w http.ResponseWriter, r *http.Request) {
 	var statusCode int
 	var entity repository.UserCredentialEntity
 	var token string
+	var refreshToken string
 	var roles []int
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -91,8 +94,15 @@ func (s service) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//generate token
-	token = s.generateToken(req.Username, time.Now().Add(time.Duration(s.env.JwtExpiredInHours)*time.Hour))
-	http.SetCookie(w, &http.Cookie{Name: "Token", Value: token, HttpOnly: false})
+	token = s.generateToken(req.Username, time.Now().Add(time.Duration(s.env.JwtExpInMinute)*time.Minute))
+	refreshToken = s.generateToken(req.Username, time.Now().Add(time.Duration(s.env.JwtExpInMinute)*time.Minute))
+	err = s.cache.Set(req.Username, refreshToken, time.Duration(s.env.JwtRefreshExpInMinute)*time.Minute)
+	if err != nil {
+		errMsg = common.InternalServerError
+		statusCode = http.StatusInternalServerError
+		goto FAILED
+	}
+	http.SetCookie(w, &http.Cookie{Name: "token", Value: refreshToken, HttpOnly: false, Secure: false})
 
 	_ = json.NewEncoder(w).Encode(&Resp{
 		Resp: common.Resp{
@@ -114,22 +124,35 @@ FAILED:
 }
 
 func (s service) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	reqToken := strings.Split(r.Header.Get("Authorization"), " ")
-	if len(reqToken) != 2 {
-		http.Error(w, "token is required", http.StatusBadRequest)
+	c, err := r.Cookie("token")
+	if err != nil {
+		http.Error(w, "no token found", http.StatusUnauthorized)
 		return
 	}
-	fmt.Println(reqToken)
-	token, err := s.jwtAuth.Decode(reqToken[1])
+	fmt.Println(c.Value)
+	token, err := s.jwtAuth.Decode(c.Value)
 	if err != nil {
 		http.Error(w, "invalid token", http.StatusBadRequest)
 		return
 	}
 
 	username, _ := token.Get("username")
-	fmt.Print(token.Get("username"))
+	fmt.Print(username)
+	_, err = s.cache.Get(username.(string))
+	if err != nil {
+		http.Error(w, "no token found", http.StatusUnauthorized)
+		return
+	}
 
-	newToken := s.generateToken(username.(string), time.Now().Add(time.Duration(s.env.JwtExpiredInHours)*time.Hour))
+	//get user roles
+	roles, err := s.getUserRole(username.(string))
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	//newToken := s.generateToken(username.(string), time.Now().Add(time.Duration(s.env.JwtExpInMinute)*time.Minute))
+	http.SetCookie(w, &http.Cookie{Name: "token", Value: c.Value, HttpOnly: false, Secure: false})
 
 	w.Header().Add("Content-type", "application/json")
 	_ = json.NewEncoder(w).Encode(&Resp{
@@ -137,7 +160,8 @@ func (s service) RefreshToken(w http.ResponseWriter, r *http.Request) {
 			Message: "success",
 		},
 		Username: username.(string),
-		Token:    newToken,
+		Token:    c.Value,
+		Roles:    roles,
 	})
 }
 
